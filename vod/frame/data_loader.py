@@ -1,10 +1,10 @@
 import os
 import numpy as np
-from typing import Optional, List
+from typing import Optional, List, Union
 from matplotlib import pyplot as plt
 import logging
 
-from vod.configuration import KittiLocations
+from vod.configuration import KittiLocations, VodTrackLocations
 
 
 class FrameDataLoader:
@@ -12,7 +12,7 @@ class FrameDataLoader:
     This class is responsible for loading any possible data from the dataset for a single specific frame.
     """
     def __init__(self,
-                 kitti_locations: KittiLocations,
+                 kitti_locations: Union[VodTrackLocations],
                  frame_number: str):
         """
 Constructor which creates the backing fields for the properties which can load and store data from the dataset
@@ -22,7 +22,7 @@ upon request
         """
 
         # Assigning parameters
-        self.kitti_locations: KittiLocations = kitti_locations
+        self.kitti_locations: VodTrackLocations = kitti_locations
         self.frame_number: str = frame_number
 
         # Getting filed id from frame number
@@ -33,7 +33,8 @@ upon request
         self._image: Optional[np.ndarray] = None
         self._lidar_data: Optional[np.ndarray] = None
         self._radar_data: Optional[np.ndarray] = None
-        self._raw_labels: Optional[np.ndarray] = None
+        self._raw_detection_labels: Optional[np.ndarray] = None
+        self._raw_tracking_labels: Optional[np.ndarray] = None
         self._prediction: Optional[np.ndarray] = None
 
     @property
@@ -84,7 +85,7 @@ Ego-motion compensated radar data from the front bumper in the format of [x, y, 
             return self._radar_data
 
     @property
-    def raw_labels(self):
+    def raw_detection_labels(self):
         """
 The labels include the ground truth data for the frame in kitti format including:
 
@@ -98,13 +99,26 @@ The labels include the ground truth data for the frame in kitti format including
 * Rotation: Rotation around -Z axis of the LiDAR sensor [-pi..pi]
         :return: Label data in string format
         """
-        if self._raw_labels is not None:
+        if self._raw_detection_labels is not None:
             # When the data is already loaded.
-            return self._raw_labels
+            return self._raw_detection_labels
         else:
             # Load data if it is not loaded yet.
-            self._raw_labels = self.get_labels()
-            return self._raw_labels
+            self._raw_detection_labels = self.get_detection_labels()
+            return self._raw_detection_labels
+
+    @property
+    def raw_tracking_labels(self):
+        """
+        Loading raw tracking labels
+        """
+        if self._raw_tracking_labels is not None:
+            # When the data is already loaded.
+            return self._raw_tracking_labels
+        else:
+            # Load data if it is not loaded yet.
+            self._raw_tracking_labels = self.get_tracking_labels()
+            return self._raw_tracking_labels
 
     @property
     def predictions(self):
@@ -183,7 +197,7 @@ does not exist, it returns None.
 
         return scan
 
-    def get_labels(self) -> Optional[List[str]]:
+    def get_detection_labels(self) -> Optional[List[str]]:
         """
 This method obtains the label information from the location specified by the KittiLocations object. If the file
 does not exist, it returns None.
@@ -192,7 +206,26 @@ does not exist, it returns None.
         """
 
         try:
-            label_file = os.path.join(self.kitti_locations.label_dir, f'{self.file_id}.txt')
+            label_file = os.path.join(self.kitti_locations.detection_label_dir, f'{self.file_id}.txt')
+            with open(label_file, 'r') as text:
+                labels = text.readlines()
+
+        except FileNotFoundError:
+            logging.error(f"{self.file_id}.txt does not exist at location: {self.kitti_locations.label_dir}!")
+            return None
+
+        return labels
+
+    def get_tracking_labels(self) -> Optional[List[str]]:
+        """
+This method obtains the label information from the location specified by the KittiLocations object. If the file
+does not exist, it returns None.
+
+        :return: List of strings with label data.
+        """
+
+        try:
+            label_file = os.path.join(self.kitti_locations.tracking_label_dir, f'{self.file_id}.txt')
             with open(label_file, 'r') as text:
                 labels = text.readlines()
 
